@@ -1,6 +1,6 @@
 # C_compiler
 
-'''
+```
 /* C compiler
 
 Copyright 1972 Bell Telephone Laboratories, Inc. 
@@ -777,5 +777,4 @@ ossiz 250;
 osleft;
 mosflg;
 debug 0;
-
-'''
+```
