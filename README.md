@@ -1,4 +1,7 @@
 # C_compiler
+'''
+
+
 
 /* C compiler
 
@@ -778,11 +781,11 @@ mosflg;
 debug 0;
 
 
-```
 
 c01.c
 
-'''
+
+
 build(op) {
 	extern cp[], cvtab, opdope[], maprel[];
 	auto p1[], t1, d1, p2[], t2, d2, p3[], t3, d3, t;
@@ -1152,11 +1155,10 @@ max(a, b)
 	return(b);
 }
 
-'''
+
 
 c02.c
 
-'''
 
 extdef() {
 	extern eof, cval, defsym;
@@ -1663,10 +1665,1119 @@ branch(lab)
 	printf("br	L%d\n", lab);
 }
 
-'''
 
 
-end
+c03.c
 
+
+retseq()
+{
+	printf("jmp	retrn\n");
+}
+
+decref(t)
+{
+
+	if ((t & 077770) == 0) {
+		error("Illegal indirection");
+		return(t);
+	}
+	return((t>>2) & 077770 | t&07);
+}
+
+incref(t)
+{
+	return((t<<2)&077740 | (t&07) | 010);
+}
+
+jumpc(tree, lbl, cond)
+int tree[];
+{
+	extern cctab, block, rcexpr;
+
+	rcexpr(block(1,easystmt()+103,tree,lbl,cond),cctab);
+}
+
+rcexpr(tree, table)
+int tree[], table;
+{
+	extern space, putwrd, putchar, line;
+	int c, sp[];
+
+	if (tree == 0)
+		return;
+	putchar('#');
+	c = space;
+	c =/ 2;		/* # addresses per word */
+	sp = 0;
+	putwrd(c);
+	putwrd(tree);
+	putwrd(table);
+	putwrd(line);
+	while(c--)
+		putwrd(*sp++);
+}
+
+jump(lab) {
+	extern printf;
+
+	printf("jmp\tl%d\n", lab);
+}
+
+label(l) {
+	extern printf;
+
+	printf("L%d:", l);
+}
+
+setstk(a) {
+	extern printf, stack;
+	auto ts;
+
+	ts = a-stack;
+	stack = a;
+	switch(ts) {
+
+	case 0:
+		return;
+
+	case 0177776:	/* -2 */
+		printf("tst	-(sp)\n");
+		return;
+
+	case 0177774:	/* -4 */
+		printf("cmp	-(sp),-(sp)\n");
+		return;
+	}
+	printf("add	$%o,sp\n", ts);
+}
+
+plength(p)
+int p[];
+{
+	int t, l;
+
+	if (((t=p[1])&077770) == 0)		/* not a reference */
+		return(1);
+	p[1] = decref(t);
+	l = length(p);
+	p[1] = t;
+	return(l);
+}
+
+length(cs)
+int cs[];
+{
+	extern hshtab[];
+	int t;
+
+	t = cs[1];
+	if ((t&030) == 030)		/* array */
+		t = decref(t);
+	if (t>=010)
+		return(2);
+	switch(t&07) {
+
+	case 0:		/* int */
+		return(2);
+
+	case 1:		/* char */
+		return(1);
+
+	case 2:		/* float */
+		return(4);
+
+	case 3:		/* double */
+		return(8);
+
+	case 4:		/* structure */
+		if (cs>=hshtab)			/* in namelist */
+			return(cs[3]);
+		return(getlen(cs));
+
+	case 5:
+		error("Bad structure");
+		return(0);
+	}
+	error("Compiler error (length)");
+}
+
+getlen(p)
+int p[];
+{
+	int p1[];
+
+	switch(*p) {
+
+	case 20:		/* name */
+		return(p[2]);
+
+	case 35:
+	case 29:		/* & */
+	case 36:		/* * */
+	case 100:		/* call */
+	case 41:		/* - */
+		return(getlen(p[3]));
+
+	case 40:		/* + */
+		p1 = p[4];
+		if ((p1[1]&07) == 04)
+			return(getlen(p1));
+		return(getlen(p[3]));
+	}
+	error("Unimplemented pointer conversion");
+	return(0);
+}
+
+rlength(cs)
+int cs[];
+{
+	auto l;
+
+	if (((l=length(cs))&01) != 0)
+		l++;
+	return(l);
+}
+
+tlength(cs)
+int cs[];
+{
+	int nel;
+
+	if ((nel = cs[8]) == 0)
+		nel = 1;
+	return(length(cs)*nel);
+}
+
+trlength(cs)
+int cs[];
+{
+	int l;
+
+	if (((l=tlength(cs))&01) != 0)
+		l++;
+	return(l);
+}
+
+printn(n,b) {
+	extern putchar;
+	auto a;
+
+	if(a=n/b) /* assignment, not test for equality */
+		printn(a, b); /* recursive */
+	putchar(n%b + '0');
+}
+
+printf(fmt,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+char fmt[]; {
+	extern printn, putchar, namsiz, ncpw;
+	char s[];
+	auto adx[], x, c, i[];
+
+	adx = &x1; /* argument pointer */
+loop:
+	while((c = *fmt++) != '%') {
+		if(c == '\0')
+			return;
+		putchar(c);
+	}
+	x = *adx++;
+	switch (c = *fmt++) {
+
+	case 'd': /* decimal */
+	case 'o': /* octal */
+		if(x < 0) {
+			x = -x;
+			if(x<0)  {	/* - infinity */
+				if(c=='o')
+					printf("100000");
+				else
+					printf("-32767");
+				goto loop;
+			}
+			putchar('-');
+		}
+		printn(x, c=='o'?8:10);
+		goto loop;
+
+	case 's': /* string */
+		s = x;
+		while(c = *s++)
+			putchar(c);
+		goto loop;
+
+	case 'p':
+		s = x;
+		putchar('_');
+		c = namsiz;
+		while(c--)
+			if (*s)
+				putchar((*s++)&0177);
+		goto loop;
+	}
+	putchar('%');
+	fmt--;
+	adx--;
+	goto loop;
+}
+
+
+
+c10.c
+
+
+/*
+
+	    	C compiler, part 2
+
+	Copyright 1972 Bell Telephone Laboratories, Inc.
+
+*/
+
+waste()		/* waste space */
+{
+	waste(waste(waste),waste(waste),waste(waste));
+	waste(waste(waste),waste(waste),waste(waste));
+	waste(waste(waste),waste(waste),waste(waste));
+	waste(waste(waste),waste(waste),waste(waste));
+	waste(waste(waste),waste(waste),waste(waste));
+	waste(waste(waste),waste(waste),waste(waste));
+	waste(waste(waste),waste(waste),waste(waste));
+	waste(waste(waste),waste(waste),waste(waste));
+}
+main(argc, argv)
+char argv[][];
+{
+	extern fout, fin, nerror, line;
+	extern getwrd, rcexpr, tmpfil;
+	extern cctab[], regtab[], efftab[], sptab[];
+	int sp[], c, table[], tabtab[3][], tree;
+
+	if (argc<4) {
+		error("Arg count");
+		exit(1);
+	}
+	if((fin=open(argv[1],0))<0) {
+		error("Cant't find %s", argv[1]);
+		exit(1);
+	}
+	if((fout=creat(argv[3],017))<0) {
+		error("Can't create %s", argv[3]);
+		exit(1);
+	}
+	tmpfil = argv[2];
+
+	tabtab[0] = regtab;
+	tabtab[1] = efftab;
+	tabtab[2] = cctab;
+	tabtab[3] = sptab;
+	while(c=getchar()) {
+		if(c=='#') {
+			sp = 0;
+			c = getwrd();
+			tree = getwrd();
+			table = tabtab[getwrd()];
+			line = getwrd();
+			while(c--)
+				*sp++ = getwrd();
+			rcexpr(tree, table, 0);
+		} else
+			putchar(c);
+	}
+	flush();
+	exit(nerror!=0);
+}
+
+match(tree, table, nreg)
+int tree[], table[]; {
+	extern opdope[], cctab, maprel;
+	int op, d1, d2, t1, t2, p1[], p2[], dope, cctab[];
+	int maprel[];
+	char mp[];
+
+	if (tree==0)
+		return(0);
+	op = *tree;
+	if (op>=29)			/* if not leaf */
+		p1 = tree[3];
+	else
+		p1 = tree;
+	t1 = p1[1];
+	d1 = dcalc(p1, nreg);
+	if (((dope=opdope[op])&01)!=0) {	/* binary? */
+		p2 = tree[4];
+		t2 = p2[1];
+		d2 = dcalc(p2, nreg);
+		if (d2>d1 & (dope&0100)!=0)	/* commute? */
+		    if (table!=cctab | (op!=47&op!=48)) { /* commute? */
+			if ((dope&04)!=0)	/* relation? */
+				*tree = op = maprel[op-60];
+			dope = t1;
+			t1 = t2;
+			t2 = dope;
+			dope = p1;
+			tree[3] = p1 = p2;
+			tree[4] = p2 = dope;
+			dope = d1;
+			d1 = d2;
+			d2 = dope;
+			dope = t1;
+			t1 = t2;
+			t2 = dope;
+		}
+	}
+	while(*table) {
+		if (*table++ == op) goto foundop;
+		table++;
+	}
+	return(0);
+foundop:
+	table = *table;
+nxtry:
+	mp = table;
+	if (*mp == 0)
+		return(0);
+	if (d1 > (*mp&077) | (*mp>=0100)&(*p1!=36))
+		goto notyet;
+	if (notcompat(t1, mp[1]))
+		goto notyet;
+	if ((opdope[op]&01)!=0 & p2!=0) {
+		if (d2 > (mp[2]&077) | (mp[2]>=0100)&(*p2!=36))
+			goto notyet;
+		if (notcompat(t2,mp[3]))
+			goto notyet;
+	}
+now:
+	return(table[2]);
+notyet:
+	table = table+3;
+	goto nxtry;
+}
+
+rcexpr(tree, table, reg)
+int tree[]; {
+	extern cexpr, regtab, cctab, sptab, printf, error;
+	extern jumpc, cbranch;
+	int r, modf;
+
+	if(tree==0)
+		return(0);
+	if(*tree == 103 | *tree==104) {
+		(*tree==103?jumpc:cbranch)(tree[1],tree[2],tree[3],0);
+		return(0);
+	}
+	modf = isfloat(tree)? 'f':0;
+	if (*tree == 110) {			/* force r0 */
+		if((r=rcexpr(tree[3], table, reg)) != 0)
+			printf("mov%c	r%d,r0\n", modf, r);
+		return(0);
+	}
+	if ((r=cexpr(tree, table, reg))>=0)
+		return(r);
+	if (table!=regtab) 
+		if((r=cexpr(tree, regtab, reg))>=0) {
+			if (table==sptab)
+				printf("mov%c	r%d,-(sp)\n", modf, r);
+			if (table==cctab) {
+				if (modf=='f')
+					printf("cfcc\n");
+				printf("tst%c	r%d\n", modf, r);
+			}
+			return(0);
+		}
+	error("No match for op %d", *tree);
+}
+
+cexpr(tree, table, reg)
+int tree[][], table[]; {
+	extern match, nreg, printf, pname, putchar, regtab;
+	extern sptab, cctab, rcexpr, prins, rlength, popstk;
+	extern collcon, isn, label, branch, cbranch;
+	extern maprel[];
+	int p1[], p2[], c, r, p[], otable[], ctable[], regtab[], cctab[];
+	int sptab[];
+	char string[], match[];
+	int reg1, rreg;
+
+	if ((c = *tree)==100) {		/* call */
+		p1 = tree[3];
+		p2 = tree[4];
+		r = 0;
+		if(*p2) {
+			while (*p2==9) { /* comma */
+				rcexpr(p2[4], sptab, 0);
+				r =+ arlength((p=p2[4])[1]);
+				p2 = p2[3];
+			}
+			rcexpr(p2, sptab, 0);
+			r =+ arlength(p2[1]);
+		}
+		*tree = 101;
+		tree[2] = r;		/* save arg length */
+	}
+	if(c==90) {		/* ? */
+		cbranch(tree[3], c=isn++, 0, reg);
+		rcexpr(tree[4][3], table, reg);
+		branch(r=isn++, 0);
+		label(c);
+		reg = rcexpr(tree[4][4], table, reg);
+		label(r);
+		goto retrn;
+	}
+	reg = oddreg(tree, reg);
+	reg1 = reg+1;
+	if ((string=match(tree, table, nreg-reg))==0) 
+		return(-1);
+	p1 = tree[3];
+	p2 = tree[4];
+loop:
+	switch(c = *string++) {
+
+	case '\0':
+		p = tree;
+		if (*p==101) {
+			if (p[2]>0)
+				popstk(p[2]);
+			reg = 0;
+		}
+retrn:
+		c = isfloat(tree);
+		if (table==cctab & c)
+			printf("cfcc\n");
+		if (!c)
+			if ((c = *tree)==43 | c==73)
+				reg--;
+		return(reg);
+
+	/* A1 */
+	case 'A':
+		p = tree[3];
+		goto adr;
+
+	/* A2 */
+	case 'B':
+		p = tree[4];
+		goto adr;
+
+	/* A */
+	case 'O':
+		p = tree;
+	adr:
+		pname(p);
+		goto loop;
+
+	/* I */
+	case 'M':
+		if ((c = *string)=='\'')
+			string++; else
+			c = 0;
+		prins(*tree, c);
+		goto loop;
+
+	/* B1 */
+	case 'C':
+		if ((c = *tree)<28)
+			p = tree;
+		else
+			p = tree[3];
+		goto pbyte;
+
+	/* BF */
+	case 'P':
+		p = tree;
+		goto pb1;
+
+	/* B2 */
+	case 'D':
+		p = tree[4];
+	pbyte:
+		if (p[1]==1)	/* char type? */
+			putchar('b');
+	pb1:
+		if (isfloat(p))
+			putchar('f');
+		goto loop;
+
+	/* BE */
+	case 'L':
+		if (tree[3][1]==1 | tree[4][1]==1)
+			putchar('b');
+		p = tree;
+		goto pb1;
+
+	/* C1 */
+	case 'E':
+		p = p1[3];
+		goto const;
+
+	/* C2 */
+	case 'F':
+		p = p2[3];
+	const:
+		printf("%o", p);
+		goto loop;
+
+	/* F */
+	case 'G':
+		p = p1;
+		goto subtre;
+
+	/* S */
+	case 'K':
+		p = p2;
+		goto subtre;
+
+	/* H */
+	case 'H':
+		p = tree;
+
+	subtre:
+		ctable = regtab;
+		r = reg;
+		c = *string++ - 'A';
+		if ((c&02)!=0)
+			ctable = sptab;
+		if ((c&04)!=0)
+			ctable = cctab;
+		if((c&010)!=0)
+			r = reg1;
+		if((c&01)!=0)
+			if(*p==36) {
+				p = p[3];
+				if(collcon(p) & ctable!=sptab)
+					p = p[3];
+			}
+		rreg = rcexpr(p, ctable, r);
+		if (rreg==r | ctable!=regtab)
+			goto loop;
+		if (string[-2]=='G')	/* left operand */
+			if (oddreg(tree, 0)==1) {
+				printf("mov	r%d,r%d\n", rreg, r);
+				goto loop;
+			}
+		if (r==reg) {
+			reg = rreg;
+			reg1 = rreg+1;
+		} else
+			reg1 = rreg;
+		goto loop;
+
+	/* R */
+	case 'I':
+		r = reg;
+		if (*string=='-') {
+			string++;
+			r--;
+		}
+		goto preg;
+
+	/* R1 */
+	case 'J':
+		r = reg1;
+	preg:
+		if (r>=5)
+			error("Register overflow: simplify expression");
+		printf("r%d", r);
+		goto loop;
+
+	case '#':
+		p = p1[3];
+		goto nmbr;
+
+	case '"':
+		p = p2[3];
+		goto nmbr;
+
+	case '~':
+		p = tree[3];
+
+	nmbr:
+		if(collcon(p)) {
+			if (*p==41)			/* - */
+				putchar('-');
+			switch (*(p = p[4])) {
+
+			case 21:		/* number */
+				if (p[3])
+					printf("%d.", p[3]);
+				break;
+
+			case 35:		/* & name */
+				pname(p[3]);
+				break;
+
+			}
+	}
+		goto loop;
+
+	/* V */
+	case 'V':
+		tree[0] = maprel[(c=tree[0])-60];
+		goto loop;
+
+	/* Z */
+	case 'Z':
+		printf("$%o", p1[5]+p1[4]);
+		goto loop;
+
+	case '^':		/* for ++ -- */
+		printf("%o", tree[4]);
+		goto loop;
+	}
+	putchar(c);
+	goto loop;
+}
+
+pname(p)
+int p[][]; {
+	char np[];
+	int i;
+
+loop:
+	switch(*p) {
+
+	case 21:		/* const */
+		printf("$%o", p[3]);
+		return;
+
+	case 23:		/* float const */
+		printf("L%d", p[3]);
+		return;
+
+	casename:
+	case 20:		/* name */
+		if (i=p[4])
+			printf("%d.+", i);
+		switch(p[3]) {
+
+		case 5:		/* auto, param */
+			printf("%d.(r5)", p[5]);
+			return;
+
+		/* extern */
+		case 6:
+			printf("%p", &p[5]);
+			return;
+
+		case 4:
+			error("Illegal structure reference");
+			printf("$0");
+			return;
+
+		}
+		printf("L%d", p[5]);
+		return;
+
+	case 35:		/* & */
+		putchar('$');
+		p = p[3];
+		goto loop;
+
+	case 36:		/* * */
+		putchar('*');
+		p = p[3];
+		goto loop;
+
+	}
+	error("pname called illegally");
+}
+
+dcalc(p, nreg)
+int p[]; {
+	int op, t, p1[], p2[];
+
+	if (p==0)
+		return(0);
+	op = *p;
+	switch (op) {
+
+	case 20:		/* name */
+	case 35:		/* & (non-automatic) */
+		return(12);
+
+	case 21:		/* short constant */
+		return(p[3]==0? 4:8);
+
+	case 23:		/* float const */
+		return(p[3]==0? 4:12);
+
+	case 36:		/* * */
+		p1 = p[3];
+		if (*p1==20)		/* name or offset name */
+			return(12);
+	}
+
+def:
+	return(p[2]<=nreg? 20: 24);
+}
+
+notcompat(at, st) {
+
+	if (st==0)		/* word, byte */
+		return(at>1 & at<=07);
+	if (st==1)		/* word */
+		return(at>0 & at<=07);
+	st =- 2;
+	if ((at&077740) != 0)
+		at = 020;		/* *int for **stuff */
+	if ((at&077770) != 0)
+		at = at&07 | 020;
+	if (st==2 & at==3)
+		at = 2;
+	return(st != at);
+}
+
+prins(op, c) {
+	extern instab[], printf;
+	int insp[];
+
+	insp = instab;
+	while(*insp) {
+		if (*insp++ == op) {
+			if ((c = insp[c!=0])==0)
+				goto err;
+			printf("%s", c);
+			return;
+		} else
+			insp = insp + 2;
+	}
+err:
+	error("No match' for op %d", op);
+}
+
+collcon(p)
+int p[]; {
+	int p1[], t[];
+
+	if(*p==40 | *p==41) {
+		if(*(p1=p[4])==21) {	/* number */
+			return(1);
+		}
+		if (*p1==35)
+			return(1);
+		if (*(p1=p[3])==35) {
+			p1 = p[3];
+			p[3] = p[4];
+			p[4] = p1;
+			return(1);
+		}
+	}
+	return(0);
+}
+
+isfloat(t)
+int t[];
+{
+	extern opdope[];
+	int rt;
+
+	if ((opdope[t[0]]&04)!=0)	/* relational */
+		t = t[3];
+	if ((rt=t[1])>=2 & rt<=3)
+		return(rt);
+	return(0);
+}
+
+nreg 3;
+isn 10000;
+namsiz 8;
+line;
+tmpfil;
+nerror;
+
+oddreg(t, reg)
+int t[];
+{
+	if (!isfloat(t))
+		switch(*t) {
+		case 43:	/* / */
+		case 44:	/* % */
+		case 73:	/* =/ */
+		case 74:	/* =% */
+			reg++;
+
+		case 42:	/* * */
+		case 72:	/* =* */
+			return(reg|1);
+		}
+	return(reg);
+}
+
+arlength(t)
+{
+	int arl;
+
+	if ((arl=rlength(t)) == 4)
+		return(8);
+	return(arl);
+}
+
+maprel[] 60, 61, 64, 65, 62, 63, 68, 69, 66, 67;
+
+
+
+c11.c
+
+
+jumpc(tree, lbl, cond)
+int tree[]; {
+	extern jump, cctab[], rcexpr, isn, label, branch, cbranch;
+	int l1, l2;
+
+	if (tree==0)
+		return;
+	switch(*tree) {
+
+	/* & */
+	case 47:
+		if (cond) {
+			cbranch(tree[3], l1=isn++, 0, 0);
+			cbranch(tree[4], l1, 0, 0);
+			jump(lbl);
+			label(l1);
+		} else {
+			cbranch(tree[3], l1=isn++, 0, 0);
+			cbranch(tree[4], l2=isn++, 1, 0);
+			label(l1);
+			jump(lbl);
+			label(l2);
+		}
+		return;
+
+	/* | */
+	case 48:
+		if (cond) {
+			cbranch(tree[3], l1=isn++, 1, 0);
+			cbranch(tree[4], l2=isn++, 0, 0);
+			label(l1);
+			jump(lbl);
+			label(l2);
+		} else {
+			cbranch(tree[3], l1=isn++, 1, 0);
+			cbranch(tree[4], l1, 1, 0);
+			jump(lbl);
+			label(l1);
+		}
+		return;
+
+	/* ! */
+	case 34:
+		jumpc(tree[3], lbl, !cond);
+		return;
+	}
+	rcexpr(tree, cctab, 0);
+	branch(l1=isn++, *tree, cond);
+	jump(lbl);
+	label(l1);
+	return;
+}
+
+cbranch(tree, lbl, cond, reg)
+int tree[]; {
+	extern branch, cctab[], rcexpr, isn, label;
+	int l1;
+
+	if (tree==0)
+		return;
+	switch(*tree) {
+
+	/* & */
+	case 47:
+		if (cond) {
+			cbranch(tree[3], l1=isn++, 0, reg);
+			cbranch(tree[4], lbl, 1, reg);
+			label(l1);
+		} else {
+			cbranch(tree[3], lbl, 0, reg);
+			cbranch(tree[4], lbl, 0, reg);
+		}
+		return;
+
+	/* | */
+	case 48:
+		if (cond) {
+			cbranch(tree[3], lbl, 1, reg);
+			cbranch(tree[4], lbl, 1, reg);
+		} else {
+			cbranch(tree[3], l1=isn++, 1, reg);
+			cbranch(tree[4], lbl, 0, reg);
+			label(l1);
+		}
+		return;
+
+	/* ! */
+	case 34:
+		cbranch(tree[3], lbl, !cond, reg);
+		return;
+	}
+	rcexpr(tree, cctab, reg);
+	branch(lbl, *tree, !cond);
+	return;
+}
+
+
+branch(lbl, op, c) {
+	extern printf, prins, opdope[];
+
+	if(op) {
+		if((opdope[op]&04)==0)
+			op = 61;
+		prins(op,c);
+	} else
+		printf("br");
+	printf("\tl%d\n", lbl);
+}
+
+jump(lab) {
+	extern printf;
+
+	printf("jmp\tl%d\n", lab);
+}
+
+label(l) {
+	extern printf;
+
+	printf("l%d:", l);
+}
+
+
+popstk(a) {
+	extern printf;
+
+	switch(a) {
+
+	case 0:
+		return;
+
+	case 2:
+		printf("tst	(sp)+\n");
+		return;
+
+	case 4:
+		printf("cmp	(sp)+,(sp)+\n");
+		return;
+	}
+	printf("add	$%o,sp\n", a);
+}
+
+length(t) {
+
+	if (t>=010)
+		return(2);
+	switch(t) {
+
+	case 0:
+		return(2);
+
+	case 1:
+		return(1);
+
+	case 2:
+		return(4);
+
+	case 3:
+		return(8);
+
+	case 4:
+		return(4);
+
+	}
+	return(1024);
+}
+
+rlength(c) {
+	extern length;
+	auto l;
+
+	return((l=length(c))==1? 2: l);
+}
+
+printd(n) {
+	int a;
+
+	if(a=n/10)
+		printd(a);
+	putchar(n%10 + '0');
+}
+
+printo(n)
+{
+	int a;
+	if (a = (n>>3) & 017777)
+		printo(a);
+	putchar((n&07) + '0');
+}
+
+printf(fmt,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+char fmt[]; {
+	extern namsiz, ncpw;
+	char s[];
+	auto adx[], x, c, i[];
+
+	adx = &x1; /* argument pointer */
+loop:
+	while((c = *fmt++) != '%') {
+		if(c == '\0')
+			return;
+		putchar(c);
+	}
+	x = *adx++;
+	switch (c = *fmt++) {
+
+	case 'o':
+		printo(x);
+		goto loop;
+
+	case 'd': /* decimal */
+		if(x < 0) {
+			x = -x;
+			if(x<0)  {	/* - infinity */
+				printf("-32768");
+				goto loop;
+			}
+			putchar('-');
+		}
+		printd(x);
+		goto loop;
+
+	case 'c':
+		if (x)
+			putchar(x);
+		goto loop;
+
+	case 's': /* string */
+		s = x;
+		while(c = *s++)
+			putchar(c);
+		goto loop;
+
+	case 'p':
+		s = x;
+		putchar('_');
+		c = namsiz;
+		while(c--)
+			if(*s)
+				putchar((*s++)&0177);
+		goto loop;
+	}
+	putchar('%');
+	fmt--;
+	adx--;
+	goto loop;
+}
+
+error(s, p1, p2) {
+	extern printf, line, fout, flush, putchar, nerror;
+	int f;
+
+	nerror++;
+	flush();
+	f = fout;
+	fout = 1;
+	printf("%d: ", line);
+	printf(s, p1, p2);
+	putchar('\n');
+	fout = f;
+}
 
 '''
